@@ -54,7 +54,7 @@ def estimate_gradients(block1: np.array, block2: np.array) -> Gradient:
 def generate_all_gradients(image_region: np.array, next_image_region: np.array) -> List[Gradient]:
     """
     Calculates the gradients for all 2x2 blocks in the image region.
-    :param image_region1: an image region of image in frame t.
+    :param image_region: a region of image in frame t.
     :param next_image_region: the corresponding image region in frame t+1.
     :return: the gradients for all 2x2 blocks in the image region.
     """
@@ -68,11 +68,31 @@ def generate_all_gradients(image_region: np.array, next_image_region: np.array) 
             block1 = image_region[min_row:min_row+2, min_col:min_col+2]
             block2 = next_image_region[min_row:min_row+2, min_col:min_col+2]
 
-            print(block1)
-
             gradients.append(estimate_gradients(block1, block2))
 
     return gradients
+
+
+def construct_matrices(block_gradients: List[Gradient]) -> (np.array, np.array):
+    """
+    Constructs the matrices A and b from the gradients of each block in an image segment.
+    :param block_gradients: a list of gradients of each 2x2 block in an image segment.
+    :return: a tuple containing matrices A and b.
+    """
+
+    A = np.zeros((2, 2))
+    b = np.zeros((2))
+
+    for ix, iy, it in block_gradients:
+        A[0, 0] += ix**2
+        A[0, 1] += ix * iy
+        A[1, 0] += ix * iy
+        A[1, 1] += iy**2
+
+        b[0] -= ix * it
+        b[1] -= iy * it
+
+    return (A, b)
 
 
 if __name__ == '__main__':
