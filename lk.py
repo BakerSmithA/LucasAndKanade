@@ -1,7 +1,8 @@
 import numpy as np
 import cv2
 from collections import namedtuple
-from typing import List
+from typing import List, Tuple
+from numpy.linalg import inv
 
 
 # Stores spatial and temporal gradients.
@@ -9,6 +10,13 @@ Gradient = namedtuple('Gradient', 'ix iy it')
 
 # 2D velocity vector
 Velocity = namedtuple('Velocity', 'x y')
+
+# Represents a region of an image in frame t and frame t+1.
+# Also stores the center of the region wrt the original image.
+Region = namedtuple('Region', 'pixels next_pixels center_row center_col')
+
+# Represents a motion estimate for a region.
+MotionEstimate = namedtuple('MotionEstimate', 'velocity center_row center_col')
 
 
 def gradient_x(block: np.array) -> float:
@@ -95,19 +103,115 @@ def construct_matrices(block_gradients: List[Gradient]) -> (np.array, np.array):
     return (A, b)
 
 
+def calculate_velocity(A: np.array, b: np.array) -> Velocity:
+    """
+    :return: the velocity calculated using matrices A and b.
+    """
+    # There might be no inverse for A.
+    try:
+        v = inv(A).dot(b)
+        return Velocity(v[0], v[1])
+    except:
+        return Velocity(0, 0)
+
+
+def generate_image_regions(frame: np.array, next_frame: np.array, region_size: int) -> List[Region]:
+    """
+    :param frame: a frame of video at time t.
+    :param next_frame: a frame of video at time t+1.
+    :param region_size: the size to divide the frames into (to calculate motion for).
+    :return: a list of regions
+    """
+
+    regions = []
+
+    rows, cols = frame.shape
+
+    # Ignore any regions that don't fit at the borders of the image.
+    num_regions_rows = int(rows / region_size)
+    num_regions_cols = int(cols / region_size)
+
+    for i in range(0, num_regions_rows):
+        for j in range(0, num_regions_cols):
+            min_row, max_row = i * region_size, (i + 1) * region_size
+            min_col, max_col = j * region_size, (j + 1) * region_size
+
+            region_pixels = frame[min_row:max_row, min_col:max_col]
+            next_region_pixels = next_frame[min_row:max_row, min_col:max_col]
+
+            center_row = int((min_row + max_row) / 2)
+            center_col = int((min_col + max_col) / 2)
+
+            r = Region(pixels=region_pixels, next_pixels=next_region_pixels, center_row=center_row, center_col=center_col)
+            regions.append(r)
+
+    return regions
+
+
+def estimate_motion(region: Region) -> MotionEstimate:
+    """
+    Estimates the motions a region
+    :param region: the regions to estimate motion for.
+    :return: the motion estimates for the regions.
+    """
+
+    gs = generate_all_gradients(region.pixels, region.next_pixels)
+    A, b = construct_matrices(gs)
+    velocity = calculate_velocity(A, b)
+
+    return MotionEstimate(velocity, region.center_row, region.center_col)
+
+
+def draw_arrow(frame: np.array, dx: float, dy: float, origin_x: int, origin_y: int):
+    end_x = int(origin_x + dx)
+    end_y = int(origin_y - dy)
+
+    cv2.line(frame, (origin_x, origin_y), (end_x, end_y), (0, 0, 255), 1)
+
+
+def draw_motion_estimate(motion: MotionEstimate, frame: np.array, scale_factor: float):
+    """
+    Draws a vector on the frame representing the motion estimate.
+    :param scale_factor: the factor by which the displayed image is scaled compared to the gray image.
+    """
+    (vx, vy), motion_row, motion_col = motion
+    adjusted_center_row = int(motion_row * scale_factor)
+    adjusted_center_col = int(motion_col * scale_factor)
+
+    draw_arrow(frame, vx, vy, adjusted_center_col, adjusted_center_row)
+
+
 if __name__ == '__main__':
-    # Web camera
     cap = cv2.VideoCapture(0)
 
-    while(True):
-        # Capture frame-by-frame
-        ret, frame = cap.read()
+    gray, prev_gray = None, None
 
-        # Our operations on the frame come here
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # The proportional image size to use for motion estimates.
+    motion_downscale_factor = 0.05
+    # The factor by which to scale down the original image for fast display, but to make it easier to see what's going
+    # on compared to the motion image.
+    display_downscale_factor = 0.2
+
+    while (True):
+        # Capture frame-by-frame
+        ret, original_frame = cap.read()
+
+        prev_gray = gray
+        gray = cv2.cvtColor(original_frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (0, 0), fx=motion_downscale_factor, fy=motion_downscale_factor)
+
+        display_image = cv2.resize(original_frame, (0, 0), fx=display_downscale_factor, fy=display_downscale_factor)
+
+        if (prev_gray is not None and gray is not None):
+            rs = generate_image_regions(prev_gray, gray, 6)
+            motions = [estimate_motion(r) for r in rs]
+
+            # Draw motion vectors.
+            for m in motions:
+                draw_motion_estimate(m, display_image, display_downscale_factor/motion_downscale_factor)
 
         # Display the resulting frame
-        cv2.imshow('frame',gray)
+        cv2.imshow('frame', display_image)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

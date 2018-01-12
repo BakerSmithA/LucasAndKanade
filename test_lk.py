@@ -80,3 +80,26 @@ class MatrixTestCase(unittest.TestCase):
 
         assert np.array_equal(A, expected_A)
         assert np.array_equal(b, expected_b)
+
+
+class MotionEstimateTestCase(unittest.TestCase):
+    def test_estimate_motion(self):
+        image = np.array(
+            [[1, 2, 3],
+             [0, 1, 2],
+             [0, 1, 2]]
+        )
+
+        next_image = np.array(
+            [[0, 0, 1],
+             [0, 0, 1],
+             [0, 0, 0]]
+        )
+
+        rs = generate_image_regions(image, next_image, 3)
+        (vx, vy), center_row, center_col = estimate_motion(rs[0])
+
+        assert abs(vx - 1.16666) <= 0.01
+        assert abs(vy - 0.83333) <= 0.01
+        assert center_row == 1
+        assert center_col == 1
