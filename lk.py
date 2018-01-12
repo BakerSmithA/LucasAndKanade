@@ -169,15 +169,16 @@ def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
     """
     (vx, vy), center_row, center_col = motion
 
-    end_row = int(center_row + vx * 3)
-    end_col = int(center_col - vy * 3)
+    SCALE_FACTOR = 12
+    end_row = int(center_row + vx * SCALE_FACTOR)
+    end_col = int(center_col - vy * SCALE_FACTOR)
 
     cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 255, 0, 0), 1)
 
 
 if __name__ == '__main__':
-    REGION_SIZE = 8
-    DOWNSCALE = 0.3
+    REGION_SIZE = 15
+    DOWNSCALE = 0.4
 
     video = cv2.VideoCapture('test.mp4')
 
@@ -188,7 +189,7 @@ if __name__ == '__main__':
     fps = int(video.get(cv2.CAP_PROP_FPS))
 
     output_size = (int(frame_width * DOWNSCALE), int(frame_height * DOWNSCALE))
-    out = cv2.VideoWriter('output.mov', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps/2, output_size)
+    out = cv2.VideoWriter('output.mov', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps/3, output_size)
 
     # Used to display the number of frames completed.
     num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
