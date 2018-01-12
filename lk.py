@@ -1,10 +1,14 @@
 import numpy as np
 import cv2
 from collections import namedtuple
+from typing import List
 
 
 # Stores spatial and temporal gradients.
 Gradient = namedtuple('Gradient', 'ix iy it')
+
+# 2D velocity vector
+Velocity = namedtuple('Velocity', 'x y')
 
 
 def gradient_x(block: np.array) -> float:
@@ -45,6 +49,30 @@ def estimate_gradients(block1: np.array, block2: np.array) -> Gradient:
     it = gradient_t(block1, block2) / 4
 
     return Gradient(ix, iy, it)
+
+
+def generate_all_gradients(image_region: np.array, next_image_region: np.array) -> List[Gradient]:
+    """
+    Calculates the gradients for all 2x2 blocks in the image region.
+    :param image_region1: an image region of image in frame t.
+    :param next_image_region: the corresponding image region in frame t+1.
+    :return: the gradients for all 2x2 blocks in the image region.
+    """
+
+    rows, cols = image_region.shape
+    gradients = []
+
+    # Get all 2x2 blocks in both regions and calculate the velocities for them.
+    for min_row in range(0, rows - 1):
+        for min_col in range(0, cols - 1):
+            block1 = image_region[min_row:min_row+2, min_col:min_col+2]
+            block2 = next_image_region[min_row:min_row+2, min_col:min_col+2]
+
+            print(block1)
+
+            gradients.append(estimate_gradients(block1, block2))
+
+    return gradients
 
 
 if __name__ == '__main__':
