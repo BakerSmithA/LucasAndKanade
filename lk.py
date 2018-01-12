@@ -169,27 +169,43 @@ def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
     """
     (vx, vy), center_row, center_col = motion
 
-    end_row = int(center_row + vx)
-    end_col = int(center_col - vy)
+    end_row = int(center_row + vx * 3)
+    end_col = int(center_col - vy * 3)
 
-    cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 0, 255), 1)
+    cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 255, 0, 0), 1)
 
 
 if __name__ == '__main__':
-    REGION_SIZE = 6
-    DOWNSCALE = 0.1
+    REGION_SIZE = 8
+    DOWNSCALE = 0.3
 
     video = cv2.VideoCapture('test.mp4')
+
+    # Default resolutions of the frame are obtained.The default resolutions are system dependent.
+    # We convert the resolutions from float to integer.
+    frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(video.get(cv2.CAP_PROP_FPS))
+
+    output_size = (int(frame_width * DOWNSCALE), int(frame_height * DOWNSCALE))
+    out = cv2.VideoWriter('output.mov', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps/2, output_size)
+
+    # Used to display the number of frames completed.
+    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    current_frame = 0
 
     # The consecutive greyscale frames used to perform motion analysis.
     motion_frame, prev_motion_frame = None, None
 
-    while True:
+    while video.isOpened():
+        print('Frame {}/{}'.format(current_frame, num_frames))
+
         ret, frame = video.read()
-        downsampled_frame = cv2.resize(frame, (0,0), fx=DOWNSCALE, fy=DOWNSCALE)
 
         if not ret:
             break
+
+        downsampled_frame = cv2.resize(frame, (0,0), fx=DOWNSCALE, fy=DOWNSCALE)
 
         prev_motion_frame = motion_frame
         motion_frame = cv2.cvtColor(downsampled_frame, cv2.COLOR_BGR2GRAY)
@@ -203,50 +219,17 @@ if __name__ == '__main__':
                 draw_motion_estimate(downsampled_frame, motion)
 
 
+        out.write(downsampled_frame)
         cv2.imshow('Motion', downsampled_frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+        current_frame += 1
+
     video.release()
+    out.release()
     cv2.destroyAllWindows()
 
     print('Done')
 
-# if __name__ == '__main__':
-#     cap = cv2.VideoCapture(0)
-#
-#     gray, prev_gray = None, None
-#
-#     # The proportional image size to use for motion estimates.
-#     motion_downscale_factor = 0.05
-#     # The factor by which to scale down the original image for fast display, but to make it easier to see what's going
-#     # on compared to the motion image.
-#     display_downscale_factor = 0.2
-#
-#     while (True):
-#         # Capture frame-by-frame
-#         ret, original_frame = cap.read()
-#
-#         prev_gray = gray
-#         gray = cv2.cvtColor(original_frame, cv2.COLOR_BGR2GRAY)
-#         gray = cv2.resize(gray, (0, 0), fx=motion_downscale_factor, fy=motion_downscale_factor)
-#
-#         display_image = cv2.resize(original_frame, (0, 0), fx=display_downscale_factor, fy=display_downscale_factor)
-#
-#         if (prev_gray is not None and gray is not None):
-#             rs = generate_image_regions(prev_gray, gray, 6)
-#             motions = [estimate_motion(r) for r in rs]
-#
-#             # Draw motion vectors.
-#             for m in motions:
-#                 draw_motion_estimate(m, display_image, display_downscale_factor/motion_downscale_factor)
-#
-#         # Display the resulting frame
-#         cv2.imshow('frame', display_image)
-#         if cv2.waitKey(1) & 0xFF == ord('q'):
-#             break
-#
-#     # When everything done, release the capture
-#     cap.release()
-#     cv2.destroyAllWindows()

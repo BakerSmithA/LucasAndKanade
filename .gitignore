@@ -103,3 +103,5 @@ ENV/
 # Extra
 *.DS_STORE
 .idea/
+test.mp4
+output.mov
