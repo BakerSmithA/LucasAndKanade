@@ -51,7 +51,7 @@ def estimate_gradients(block1: np.array, block2: np.array) -> Gradient:
     :return: the spatial and temporal gradients for the block.
     """
 
-    # Normalise by dividing by 4
+    # Normalise by dividing by 4.
     ix = (gradient_x(block1) + gradient_x(block2)) / 4
     iy = (gradient_y(block1) + gradient_y(block2)) / 4
     it = gradient_t(block1, block2) / 4
@@ -162,59 +162,91 @@ def estimate_motion(region: Region) -> MotionEstimate:
     return MotionEstimate(velocity, region.center_row, region.center_col)
 
 
-def draw_arrow(frame: np.array, dx: float, dy: float, origin_x: int, origin_y: int):
-    end_x = int(origin_x + dx)
-    end_y = int(origin_y - dy)
-
-    cv2.line(frame, (origin_x, origin_y), (end_x, end_y), (0, 0, 255), 1)
-
-
-def draw_motion_estimate(motion: MotionEstimate, frame: np.array, scale_factor: float):
+def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
     """
     Draws a vector on the frame representing the motion estimate.
     :param scale_factor: the factor by which the displayed image is scaled compared to the gray image.
     """
-    (vx, vy), motion_row, motion_col = motion
-    adjusted_center_row = int(motion_row * scale_factor)
-    adjusted_center_col = int(motion_col * scale_factor)
+    (vx, vy), center_row, center_col = motion
 
-    draw_arrow(frame, vx, vy, adjusted_center_col, adjusted_center_row)
+    end_row = int(center_row + vx)
+    end_col = int(center_col - vy)
+
+    cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 0, 255), 1)
 
 
 if __name__ == '__main__':
-    cap = cv2.VideoCapture(0)
+    REGION_SIZE = 6
+    DOWNSCALE = 0.1
 
-    gray, prev_gray = None, None
+    video = cv2.VideoCapture('test.mp4')
 
-    # The proportional image size to use for motion estimates.
-    motion_downscale_factor = 0.05
-    # The factor by which to scale down the original image for fast display, but to make it easier to see what's going
-    # on compared to the motion image.
-    display_downscale_factor = 0.2
+    # The consecutive greyscale frames used to perform motion analysis.
+    motion_frame, prev_motion_frame = None, None
 
-    while (True):
-        # Capture frame-by-frame
-        ret, original_frame = cap.read()
+    while True:
+        ret, frame = video.read()
+        downsampled_frame = cv2.resize(frame, (0,0), fx=DOWNSCALE, fy=DOWNSCALE)
 
-        prev_gray = gray
-        gray = cv2.cvtColor(original_frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (0, 0), fx=motion_downscale_factor, fy=motion_downscale_factor)
+        if not ret:
+            break
 
-        display_image = cv2.resize(original_frame, (0, 0), fx=display_downscale_factor, fy=display_downscale_factor)
+        prev_motion_frame = motion_frame
+        motion_frame = cv2.cvtColor(downsampled_frame, cv2.COLOR_BGR2GRAY)
 
-        if (prev_gray is not None and gray is not None):
-            rs = generate_image_regions(prev_gray, gray, 6)
-            motions = [estimate_motion(r) for r in rs]
+        # Perform motion analysis
+        if prev_motion_frame is not None and motion_frame is not None:
+            regions = generate_image_regions(prev_motion_frame, motion_frame, REGION_SIZE)
 
-            # Draw motion vectors.
-            for m in motions:
-                draw_motion_estimate(m, display_image, display_downscale_factor/motion_downscale_factor)
+            for region in regions:
+                motion = estimate_motion(region)
+                draw_motion_estimate(downsampled_frame, motion)
 
-        # Display the resulting frame
-        cv2.imshow('frame', display_image)
+
+        cv2.imshow('Motion', downsampled_frame)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # When everything done, release the capture
-    cap.release()
+    video.release()
     cv2.destroyAllWindows()
+
+    print('Done')
+
+# if __name__ == '__main__':
+#     cap = cv2.VideoCapture(0)
+#
+#     gray, prev_gray = None, None
+#
+#     # The proportional image size to use for motion estimates.
+#     motion_downscale_factor = 0.05
+#     # The factor by which to scale down the original image for fast display, but to make it easier to see what's going
+#     # on compared to the motion image.
+#     display_downscale_factor = 0.2
+#
+#     while (True):
+#         # Capture frame-by-frame
+#         ret, original_frame = cap.read()
+#
+#         prev_gray = gray
+#         gray = cv2.cvtColor(original_frame, cv2.COLOR_BGR2GRAY)
+#         gray = cv2.resize(gray, (0, 0), fx=motion_downscale_factor, fy=motion_downscale_factor)
+#
+#         display_image = cv2.resize(original_frame, (0, 0), fx=display_downscale_factor, fy=display_downscale_factor)
+#
+#         if (prev_gray is not None and gray is not None):
+#             rs = generate_image_regions(prev_gray, gray, 6)
+#             motions = [estimate_motion(r) for r in rs]
+#
+#             # Draw motion vectors.
+#             for m in motions:
+#                 draw_motion_estimate(m, display_image, display_downscale_factor/motion_downscale_factor)
+#
+#         # Display the resulting frame
+#         cv2.imshow('frame', display_image)
+#         if cv2.waitKey(1) & 0xFF == ord('q'):
+#             break
+#
+#     # When everything done, release the capture
+#     cap.release()
+#     cv2.destroyAllWindows()
