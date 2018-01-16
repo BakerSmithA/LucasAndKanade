@@ -43,7 +43,7 @@ class GradientsTestCase(unittest.TestCase):
              [0, 0, 0]]
         )
 
-        gs = generate_all_gradients(segment, next_segment)
+        gs = estimate_all_gradients(segment, next_segment)
 
         g1 = Gradient(ix=2/4, iy=2/4, it=-4/4)
         g2 = Gradient(ix=4/4, iy=2/4, it=-6/4)
@@ -67,7 +67,7 @@ class MatrixTestCase(unittest.TestCase):
              [0, 0, 0]]
         )
 
-        gs = generate_all_gradients(segment, next_segment)
+        gs = estimate_all_gradients(segment, next_segment)
 
         (A, b) = construct_matrices(gs)
 
@@ -83,7 +83,7 @@ class MatrixTestCase(unittest.TestCase):
 
 
 class MotionEstimateTestCase(unittest.TestCase):
-    def test_estimate_motion(self):
+    def test_estimate_region_motion(self):
         image = np.array(
             [[1, 2, 3],
              [0, 1, 2],
@@ -97,7 +97,7 @@ class MotionEstimateTestCase(unittest.TestCase):
         )
 
         rs = generate_image_regions(image, next_image, 3)
-        (vx, vy), center_row, center_col = estimate_motion(rs[0])
+        (vx, vy), center_row, center_col = estimate_region_motion(rs[0])
 
         assert abs(vx - 1.16666) <= 0.01
         assert abs(vy - 0.83333) <= 0.01

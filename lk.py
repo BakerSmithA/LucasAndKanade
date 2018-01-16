@@ -1,19 +1,21 @@
 import numpy as np
-import cv2
 from collections import namedtuple
-from typing import List, Tuple
+from typing import List
 from numpy.linalg import inv
 
 
 # Stores spatial and temporal gradients.
 Gradient = namedtuple('Gradient', 'ix iy it')
 
+
 # 2D velocity vector
 Velocity = namedtuple('Velocity', 'x y')
+
 
 # Represents a region of an image in frame t and frame t+1.
 # Also stores the center of the region wrt the original image.
 Region = namedtuple('Region', 'pixels next_pixels center_row center_col')
+
 
 # Represents a motion estimate for a region.
 MotionEstimate = namedtuple('MotionEstimate', 'velocity center_row center_col')
@@ -50,7 +52,6 @@ def estimate_gradients(block1: np.array, block2: np.array) -> Gradient:
     :param block2: a 2x2 block of the corresponding section of image in frame t+1.
     :return: the spatial and temporal gradients for the block.
     """
-
     # Normalise by dividing by 4.
     ix = (gradient_x(block1) + gradient_x(block2)) / 4
     iy = (gradient_y(block1) + gradient_y(block2)) / 4
@@ -59,14 +60,13 @@ def estimate_gradients(block1: np.array, block2: np.array) -> Gradient:
     return Gradient(ix, iy, it)
 
 
-def generate_all_gradients(image_region: np.array, next_image_region: np.array) -> List[Gradient]:
+def estimate_all_gradients(image_region: np.array, next_image_region: np.array) -> List[Gradient]:
     """
     Calculates the gradients for all 2x2 blocks in the image region.
     :param image_region: a region of image in frame t.
     :param next_image_region: the corresponding image region in frame t+1.
     :return: the gradients for all 2x2 blocks in the image region.
     """
-
     rows, cols = image_region.shape
     gradients = []
 
@@ -87,7 +87,6 @@ def construct_matrices(block_gradients: List[Gradient]) -> (np.array, np.array):
     :param block_gradients: a list of gradients of each 2x2 block in an image segment.
     :return: a tuple containing matrices A and b.
     """
-
     A = np.zeros((2, 2))
     b = np.zeros((2))
 
@@ -122,7 +121,6 @@ def generate_image_regions(frame: np.array, next_frame: np.array, region_size: i
     :param region_size: the size to divide the frames into (to calculate motion for).
     :return: a list of regions
     """
-
     regions = []
 
     rows, cols = frame.shape
@@ -148,89 +146,25 @@ def generate_image_regions(frame: np.array, next_frame: np.array, region_size: i
     return regions
 
 
-def estimate_motion(region: Region) -> MotionEstimate:
+def estimate_region_motion(region: Region) -> MotionEstimate:
     """
     Estimates the motions a region
     :param region: the regions to estimate motion for.
     :return: the motion estimates for the regions.
     """
-
-    gs = generate_all_gradients(region.pixels, region.next_pixels)
+    gs = estimate_all_gradients(region.pixels, region.next_pixels)
     A, b = construct_matrices(gs)
     velocity = calculate_velocity(A, b)
 
     return MotionEstimate(velocity, region.center_row, region.center_col)
 
 
-def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
+def estimate_motion(frame: np.array, next_frame: np.array, region_size: int) -> List[MotionEstimate]:
     """
-    Draws a vector on the frame representing the motion estimate.
-    :param scale_factor: the factor by which the displayed image is scaled compared to the gray image.
+    Estimates motions for all regions in the frames.
+    :param frame: the image at frame t.
+    :param next_frame: the image at frame t+1.
+    :return: a list of motion estimates for each region.
     """
-    (vx, vy), center_row, center_col = motion
-
-    SCALE_FACTOR = 12
-    end_row = int(center_row + vx * SCALE_FACTOR)
-    end_col = int(center_col - vy * SCALE_FACTOR)
-
-    cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 255, 0, 0), 1)
-
-
-if __name__ == '__main__':
-    REGION_SIZE = 15
-    DOWNSCALE = 0.4
-
-    video = cv2.VideoCapture('test.mp4')
-
-    # Default resolutions of the frame are obtained.The default resolutions are system dependent.
-    # We convert the resolutions from float to integer.
-    frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(video.get(cv2.CAP_PROP_FPS))
-
-    output_size = (int(frame_width * DOWNSCALE), int(frame_height * DOWNSCALE))
-    out = cv2.VideoWriter('output.mov', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps/3, output_size)
-
-    # Used to display the number of frames completed.
-    num_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    current_frame = 0
-
-    # The consecutive greyscale frames used to perform motion analysis.
-    motion_frame, prev_motion_frame = None, None
-
-    while video.isOpened():
-        print('Frame {}/{}'.format(current_frame, num_frames))
-
-        ret, frame = video.read()
-
-        if not ret:
-            break
-
-        downsampled_frame = cv2.resize(frame, (0,0), fx=DOWNSCALE, fy=DOWNSCALE)
-
-        prev_motion_frame = motion_frame
-        motion_frame = cv2.cvtColor(downsampled_frame, cv2.COLOR_BGR2GRAY)
-
-        # Perform motion analysis
-        if prev_motion_frame is not None and motion_frame is not None:
-            regions = generate_image_regions(prev_motion_frame, motion_frame, REGION_SIZE)
-
-            for region in regions:
-                motion = estimate_motion(region)
-                draw_motion_estimate(downsampled_frame, motion)
-
-
-        out.write(downsampled_frame)
-        cv2.imshow('Motion', downsampled_frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-        current_frame += 1
-
-    video.release()
-    out.release()
-    cv2.destroyAllWindows()
-
-    print('Done')
-
+    regions = generate_image_regions(frame, next_frame, region_size)
+    return [estimate_region_motion(r) for r in regions]
