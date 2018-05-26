@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from lk import estimate_motion, MotionEstimate
 
+
 def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
     """
     Draws a vector on the frame representing the motion estimate.
@@ -16,7 +17,7 @@ def draw_motion_estimate(frame: np.array, motion: MotionEstimate):
     cv2.line(frame, (center_col, center_row), (end_col, end_row), (0, 255, 0, 0), 1)
 
 
-if __name__ == '__main__':
+def run():
     REGION_SIZE = 15
     DOWNSCALE = 0.05
 
@@ -72,3 +73,7 @@ if __name__ == '__main__':
     cv2.destroyAllWindows()
 
     print('Done')
+
+
+if __name__ == '__main__':
+    run()
